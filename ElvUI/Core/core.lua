@@ -1173,4 +1173,9 @@ function E:Initialize(loginFrame)
 	if self.db.general.loginmessage then
 		self:Print(select(2, E:GetModule("Chat"):FindURL("CHAT_MSG_DUMMY", format(L["LOGIN_MSG"], self.media.hexvaluecolor, self.media.hexvaluecolor, self.version)))..".")
 	end
+	
+	self.inventory = AceDB:New("ElvInventoryDB", self.Inventory)
+	self.inventory.global = self.inventory.global or {}
+	self.inventory.global[E.myrealm] = self.inventory.global[E.myrealm] or {}
+	self.inventory.global[E.myrealm][E.myname] = self.inventory.global[E.myrealm][E.myname] or {}
 end

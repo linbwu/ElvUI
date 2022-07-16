@@ -8,7 +8,7 @@ local _G = _G
 local unpack = unpack
 local getn, twipe, tinsert, tconcat = table.getn, table.wipe, table.insert, table.concat
 local floor = math.floor
-local find, format, match = string.find, string.format, string.match
+local find, format, match, tostring  = string.find, string.format, string.match, tostring 
 --WoW API / Variables
 local GetActionCount = GetActionCount
 local GetAuctionItemInfo = GetAuctionItemInfo
@@ -271,12 +271,72 @@ end
 
 function TT:SetItemRef(link)
 	if find(link, "^item:") then
-		if E.db.tooltip.spellID then
-			local id = tonumber(match(link, "(%d+)"))
-			ItemRefTooltip:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-		end
+		local id = tonumber(match(link, "(%d+)"))
+		self:SetSpellIDAndCount(ItemRefTooltip, id)
 	end
 	ItemRefTooltip:Show()
+end
+
+function TT:SetSpellIDAndCount(tt, id)
+	local item = self:GetItemCountFromDB(id)
+	local total = 0
+	local counter
+	for _, counter in pairs(item) do
+		total = total + counter["total"]
+	end
+	if E.db.tooltip.spellID then
+		if total == 0 then
+			tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
+		else
+			tt:AddDoubleLine(format("|cFFCA3C3C%s|r %d", ID, id), format("|cFFCA3C3C%s|r %d", L["Count"], total))
+		end
+	elseif total > 0 then
+		tt:AddDoubleLine("", format("|cFFCA3C3C%s|r %d", L["Count"], total))
+	end
+	
+	if total == 0 then
+		return
+	end
+	local username
+	for username, counter in pairs(item) do
+		if counter["total"] > 0 then
+			local coutStr = {}
+			if counter["total"] == counter["bag"] then
+				table.insert(coutStr, L["Bags"])
+				table.insert(coutStr, format(": %d", counter["total"]))
+			elseif counter["total"] == counter["bank"] then
+				table.insert(coutStr, L["Bank"])
+				table.insert(coutStr, format(": %d", counter["total"]))
+			elseif counter["total"] == counter["equipment"] then
+				table.insert(coutStr, L["Equipped"])
+				table.insert(coutStr, format(": %d", counter["total"]))
+			else
+				table.insert(coutStr, format("%d(", counter["total"]))
+				local fm = {}
+				if counter["bag"] > 0 then
+					table.insert(fm, L["Bags"])
+					table.insert(fm, format(": %d", counter["bag"]))
+					table.insert(fm, " ")
+				end
+				if counter["bank"] > 0 then
+					table.insert(fm, L["Bank"])
+					table.insert(fm, format(": %d", counter["bank"]))
+					table.insert(fm, " ")
+				end
+				if counter["equipment"] > 0 then
+					table.insert(fm, L["Equipped"])
+					table.insert(fm, format(": %d", counter["equipment"]))
+					table.insert(fm, " ")
+				end
+				if table.maxn(fm) > 0 then
+					table.remove(fm) 
+				end
+				table.insert(coutStr, table.concat(fm, ""))
+				table.insert(coutStr, ")")
+			end
+			tt:AddDoubleLine(username, table.concat(coutStr, ""))
+		end
+	end
 end
 
 function TT:SetPrice(tt, id, count)
@@ -286,15 +346,80 @@ function TT:SetPrice(tt, id, count)
 	local price = LIP:GetSellValue(id)
 
 	if price and price > 0 then
-		tt:AddDoubleLine(SALE_PRICE_COLON, E:FormatMoney(count and price * count or price, "BLIZZARD", false), nil, nil, nil, 1, 1, 1)
 		if count > 1 then
-			tt:AddDoubleLine(L["Unit Price:"], E:FormatMoney(price, "BLIZZARD", false), nil, nil, nil, 1, 1, 1)
+			local total = {SALE_PRICE_COLON, E:FormatMoney(count and price * count or price, "BLIZZARD", false)}
+			local unit = {L["Unit Price:"], E:FormatMoney(price, "BLIZZARD", false)}
+			tt:AddDoubleLine(table.concat(total, ""), table.concat(unit, " "))
+		else
+			tt:AddDoubleLine(SALE_PRICE_COLON, E:FormatMoney(count and price * count or price, "BLIZZARD", false), nil, nil, nil, 1, 1, 1)
 		end
 	end
 	local _,_,_,_,_,_,stack = GetItemInfo(id)
 	if stack > 1 then
 		tt:AddDoubleLine(L["Stackable Size:"], stack, 1, 1, 1, 1, 1, 1)
 	end
+end
+
+function TT:GetItemCountFromDB(itemId)
+	local item = {}
+	local username
+	for username, _ in pairs(ElvInventoryDB.global[E.myrealm]) do
+		item[username] = {
+			["bag"] = self:GetItemCountFromBag(username, itemId),
+			["bank"] = self:GetItemCountFromBank(username, itemId),
+			["equipment"] = self:GetItemCountFromInventory(username, itemId)
+		}
+		item[username]["total"] = item[username]["bag"] + item[username]["bank"] + item[username]["equipment"]
+	end
+	return item
+end
+
+function TT:GetItemCountFromInventory(username, itemId)
+	local contains = ElvInventoryDB.global[E.myrealm][username]["equipment"]
+	if not contains then
+		return 0
+	end
+	
+	local count = 0
+	local _, item
+	for _, item in pairs(contains) do
+		if item and item == itemId then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+
+function TT:GetItemCountFromBagGroup(username, itemId, bags)
+	local db = ElvInventoryDB.global[E.myrealm][username]
+	if not db then
+		return 0
+	end
+
+	local bag, item
+	local count = 0
+	for _, bag in pairs(bags) do
+		local contains = db[tostring(bag)]
+		if contains then
+			for _, item in pairs(contains) do
+				if item and item["id"] == itemId then
+					count = count + item["count"]
+				end
+			end
+		end
+	end
+	return count
+end
+
+function TT:GetItemCountFromBag(username, itemId)
+	bags = {0, 1, 2, 3, 4}
+	return self:GetItemCountFromBagGroup(username, itemId, bags)
+end
+
+function TT:GetItemCountFromBank(username, itemId)
+	bags = {-1, 5, 6, 7, 8, 9, 10, 11}
+	return self:GetItemCountFromBagGroup(username, itemId, bags)
 end
 
 function TT:SetAction(tt, buttonID)
@@ -319,9 +444,7 @@ function TT:SetAction(tt, buttonID)
 		self:SetPrice(tt, id, count)
 	end
 
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -336,9 +459,7 @@ function TT:SetAuctionItem(tt, type, index)
 		self:SetPrice(tt, id, count)
 	end
 
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -353,9 +474,7 @@ function TT:SetAuctionSellItem(tt)
 		self:SetPrice(tt, id, count)
 	end
 
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -369,9 +488,8 @@ function TT:SetBagItem(tt, bag, slot)
 		local _, count = GetContainerItemInfo(bag, slot)
 		self:SetPrice(tt, id, count)
 	end
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -389,9 +507,8 @@ function TT:SetCraftItem(tt, skill, slot)
 
 		self:SetPrice(tt, id, count)
 	end
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -401,9 +518,7 @@ function TT:SetCraftSpell(tt, id)
 
 	local id = tonumber(match(link, "enchant:(%d+)"))
 
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -428,9 +543,7 @@ function TT:SetHyperlink(tt, link, count)
 	end
 
 	if tt:GetName() == "GameTooltip" then
-		if E.db.tooltip.spellID then
-			tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-		end
+		self:SetSpellIDAndCount(tt, id)
 	end
 
 	tt:Show()
@@ -447,9 +560,7 @@ function TT:SetInboxItem(tt, index, attachmentIndex)
 		self:SetPrice(tt, id, count)
 	end
 
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -470,9 +581,7 @@ function TT:SetInventoryItem(tt, unit, slot)
 		self:SetPrice(tt, id, count)
 	end
 
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -486,9 +595,8 @@ function TT:SetLootItem(tt, slot)
 		local _, _, count = GetLootSlotInfo(slot)
 		self:SetPrice(tt, id, count)
 	end
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -502,9 +610,8 @@ function TT:SetLootRollItem(tt, rollID)
 		local _, _, count = GetLootRollItemInfo(rollID)
 		self:SetPrice(tt, id, count)
 	end
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -518,9 +625,8 @@ function TT:SetMerchantItem(tt, slot)
 		local _, _, _, count = GetMerchantItemInfo(slot)
 		self:SetPrice(tt, id, count)
 	end
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -534,9 +640,8 @@ function TT:SetQuestItem(tt, type, slot)
 		local _, _, count = GetQuestItemInfo(type, slot)
 		self:SetPrice(tt, id, count)
 	end
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+	
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -550,9 +655,8 @@ function TT:SetQuestLogItem(tt, type, index)
 		local _, _, count = GetQuestLogRewardInfo(index)
 		self:SetPrice(tt, id, count)
 	end
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -567,9 +671,7 @@ function TT:SetSendMailItem(tt, index)
 		self:SetPrice(tt, id, count)
 	end
 
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -584,9 +686,7 @@ function TT:SetTradePlayerItem(tt, index)
 		self:SetPrice(tt, id, count)
 	end
 
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -606,9 +706,7 @@ function TT:SetTradeSkillItem(tt, skill, slot)
 		self:SetPrice(tt, id, count)
 	end
 
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 
@@ -623,9 +721,7 @@ function TT:SetTradeTargetItem(tt, index)
 		self:SetPrice(tt, id, count)
 	end
 
-	if E.db.tooltip.spellID then
-		tt:AddLine(format("|cFFCA3C3C%s|r %d", ID, id))
-	end
+	self:SetSpellIDAndCount(tt, id)
 	tt:Show()
 end
 

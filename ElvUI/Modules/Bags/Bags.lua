@@ -9,7 +9,7 @@ local _G = _G
 local type, ipairs, pairs, unpack, select, assert, pcall = type, ipairs, pairs, unpack, select, assert, pcall
 local tinsert, tremove, twipe, tmaxn = table.insert, table.remove, table.wipe, table.maxn
 local floor, abs, mod = math.floor, math.abs, math.fmod
-local format, len, match, sub, gsub = string.format, string.len, string.match, string.sub, string.gsub
+local format, len, match, sub, gsub, tostring = string.format, string.len, string.match, string.sub, string.gsub, tostring 
 --WoW API / Variables
 local BankFrameItemButton_OnUpdate = BankFrameItemButton_OnUpdate
 local BankFrameItemButton_UpdateLock = BankFrameItemButton_UpdateLock
@@ -791,7 +791,7 @@ function B:OnEvent()
 			end
 		end
 
-		this:UpdateBagSlots(bag, slot)
+		this:UpdateBagSlots(bag)
 
 		--Refresh search in case we moved items around
 		if B:IsSearching() then
@@ -1316,6 +1316,8 @@ function B:OpenBank()
 	self.BankFrame:UpdateAllSlots()
 
 	self:OpenBags()
+	
+	self:UpdateBankItems()
 end
 
 function B:PLAYERBANKBAGSLOTS_CHANGED()
@@ -1327,11 +1329,19 @@ function B:CloseBank()
 	self.BankFrame:Hide()
 end
 
-local playerEnteringWorldFunc = function() B:UpdateBagTypes() B:Layout() end
+local playerEnteringWorldFunc = function()
+	B:UpdateBagTypes()
+	B:Layout()
+	-- when login, default 16 slot bag not fired the BAG_UPDATE event
+	B:UpdateBagItems(0)
+	B:UpdateEquipmentItems()
+end
+
 function B:PLAYER_ENTERING_WORLD()
 	self:UpdateGoldText()
 
 	E:Delay(2, playerEnteringWorldFunc) -- Update bag types for bagslot coloring
+	self.IsBankLoaded = false
 end
 
 function B:updateContainerFrameAnchors()
@@ -1569,9 +1579,81 @@ function B:UpdateQuestColors(table, indice, r, g, b)
 	self[table][B.QuestKeys[indice]] = {r, g, b}
 end
 
+function B:UpdateEquipmentItem(slot)
+	local itemLink = GetInventoryItemLink("player", slot)
+	if itemLink then
+		local itemId = tonumber(match(itemLink, "item:(%d+)"))
+		ElvInventoryDB.global[E.myrealm][E.myname]["equipment"][slot] = itemId
+	else
+		ElvInventoryDB.global[E.myrealm][E.myname]["equipment"][slot] = nil
+	end
+end
+
+function B:UpdateEquipmentItems()
+	ElvInventoryDB.global[E.myrealm][E.myname]["equipment"] = ElvInventoryDB.global[E.myrealm][E.myname]["equipment"] or {}
+	for slot = 1, 19 do
+		self:UpdateEquipmentItem(slot)
+	end
+end
+
+function B:UpdateBagItems(bag)
+	if bag <= KEYRING_CONTAINER then
+		return
+	end
+	
+	local slotsNum = GetContainerNumSlots(bag)
+	
+	if slotsNum < 1 then
+		ElvInventoryDB.global[E.myrealm][E.myname][tostring(bag)] = {}
+		return
+	end
+	
+	local items = {}
+	local slot, itemLink, itemId
+	for slot = 1, slotsNum do
+		itemLink = GetContainerItemLink(bag, slot)
+		if itemLink then
+			itemId = tonumber(match(itemLink, "item:(%d+)"))
+			stackCount = select(2, GetContainerItemInfo(bag, slot)) or 1
+			items[slot] = {["id"]=itemId, ["count"]=stackCount}
+		else
+			items[slot] = nil
+		end
+	end
+	ElvInventoryDB.global[E.myrealm][E.myname][tostring(bag)] = items
+end
+
+function B:OnEquipmentChanged()
+	self:UpdateEquipmentItems()
+end
+
+function B:OnBagUpdate()
+	local bag = arg1
+	if bag == KEYRING_CONTAINER then
+		return
+	else
+		self:UpdateBagItems(bag)
+	end
+end
+
+function B:OnDefaultBankUpdate()
+	self:UpdateBagItems(-1)
+end
+
+function B:UpdateBankItems()
+	if not self.IsBankLoaded then
+		self.IsBankLoaded = true
+		local BagIDs = {-1, 5, 6, 7, 8, 9, 10, 11}
+		for _, bag in pairs(BagIDs) do
+			self:UpdateBagItems(bag)
+		end
+	end
+end
+
 function B:Initialize()
 	self:LoadBagBar()
 
+	self.IsBankLoaded = false
 	--Bag Mover (We want it created even if Bags module is disabled, so we can use it for default bags too)
 	local BagFrameHolder = CreateFrame("Frame", nil, E.UIParent)
 	E:Width(BagFrameHolder, 200)
@@ -1652,6 +1734,9 @@ function B:Initialize()
 	self:RegisterEvent("BANKFRAME_OPENED", "OpenBank")
 	self:RegisterEvent("BANKFRAME_CLOSED", "CloseBank")
 	self:RegisterEvent("PLAYERBANKBAGSLOTS_CHANGED")
+	self:RegisterEvent("BAG_UPDATE", "OnBagUpdate")
+	self:RegisterEvent("PLAYERBANKSLOTS_CHANGED", "OnDefaultBankUpdate")
+	self:RegisterEvent("UNIT_INVENTORY_CHANGED", "OnEquipmentChanged")
 end
 
 local function InitializeCallback()

@@ -30,6 +30,9 @@ AddOn.DF.profile = {}
 AddOn.DF.global = {}
 AddOn.privateVars = {}
 AddOn.privateVars.profile = {}
+AddOn.Inventory = {}
+AddOn.Inventory.global = {}
+
 
 AddOn.Options = {
 	type = "group",
