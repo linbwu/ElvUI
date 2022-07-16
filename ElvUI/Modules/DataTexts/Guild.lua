@@ -216,13 +216,18 @@ local function OnEnter(self, _, noUpdate)
 		info = guildTable[i]
 		if GetRealZoneText() == info[4] then zonec = activezone else zonec = inactivezone end
 		classc, levelc = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[info[9]]) or RAID_CLASS_COLORS[info[9]], GetQuestDifficultyColor(info[3])
+		if classc then
+			r, g, b = classc.r, classc.g, classc.b
+		else
+			r, g, b = 1, 1, 1
+		end
 
 		if IsShiftKeyDown() then
-			DT.tooltip:AddDoubleLine(format(nameRankString, info[1], info[2]), info[4], classc.r, classc.g, classc.b, zonec.r, zonec.g, zonec.b)
+			DT.tooltip:AddDoubleLine(format(nameRankString, info[1], info[2]), info[4], r, g, b, zonec.r, zonec.g, zonec.b)
 			if info[5] ~= "" then DT.tooltip:AddLine(format(noteString, info[5]), ttsubh.r, ttsubh.g, ttsubh.b, 1) end
 			if info[6] ~= "" then DT.tooltip:AddLine(format(officerNoteString, info[6]), ttoff.r, ttoff.g, ttoff.b, 1) end
 		else
-			DT.tooltip:AddDoubleLine(format(levelNameStatusString, levelc.r*255, levelc.g*255, levelc.b*255, info[3], info[1], "", info[8]), info[4], classc.r, classc.g, classc.b, zonec.r, zonec.g, zonec.b)
+			DT.tooltip:AddDoubleLine(format(levelNameStatusString, levelc.r*255, levelc.g*255, levelc.b*255, info[3], info[1], "", info[8]), info[4], r, g, b, zonec.r, zonec.g, zonec.b)
 		end
 		shown = shown + 1
 	end
