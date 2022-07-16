@@ -104,6 +104,7 @@ L["Total CPU:"] = "CPU佔用"
 L["Total Memory:"] = "總記憶體:"
 L["Total: "] = "合計: "
 L["Unhittable:"] = "未命中:"
+L["Unit Price:"] = "單價:"
 L["Wintergrasp"] = true
 
 --DebugTools

@@ -105,6 +105,7 @@ L["Total Memory:"] = true;
 L["Total: "] = true;
 L["Unhittable:"] = true;
 L["Wintergrasp"] = true;
+L["Unit Price:"] = true;
 
 --DebugTools
 L["%s: %s tried to call the protected function '%s'."] = true;

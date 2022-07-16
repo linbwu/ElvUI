@@ -105,6 +105,7 @@ L["Total Memory:"] = "Memória Total:"
 L["Total: "] = "Total: "
 L["Unhittable:"] = "Inacertável"
 L["Wintergrasp"] = true
+L["Unit Price:"] = true
 
 --DebugTools
 L["%s: %s tried to call the protected function '%s'."] = "%s: %s tentou chamar a função protegida '%s'."

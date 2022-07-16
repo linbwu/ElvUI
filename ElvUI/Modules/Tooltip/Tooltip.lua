@@ -286,6 +286,9 @@ function TT:SetPrice(tt, id, count)
 
 	if price and price > 0 then
 		tt:AddDoubleLine(SALE_PRICE_COLON, E:FormatMoney(count and price * count or price, "BLIZZARD", false), nil, nil, nil, 1, 1, 1)
+		if count > 1 then
+			tt:AddDoubleLine(L["Unit Price:"], E:FormatMoney(price, "BLIZZARD", false), nil, nil, nil, 1, 1, 1)
+		end
 	end
 end
 
