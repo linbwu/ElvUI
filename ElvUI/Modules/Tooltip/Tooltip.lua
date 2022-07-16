@@ -25,6 +25,7 @@ local GetInboxItem = GetInboxItem
 local GetInventoryItemCount = GetInventoryItemCount
 local GetInventoryItemLink = GetInventoryItemLink
 local GetItemCount = GetItemCount
+local GetItemInfo = GetItemInfo
 local GetItemInfoByName = GetItemInfoByName
 local GetLootRollItemInfo = GetLootRollItemInfo
 local GetLootRollItemLink = GetLootRollItemLink
@@ -289,6 +290,10 @@ function TT:SetPrice(tt, id, count)
 		if count > 1 then
 			tt:AddDoubleLine(L["Unit Price:"], E:FormatMoney(price, "BLIZZARD", false), nil, nil, nil, 1, 1, 1)
 		end
+	end
+	local _,_,_,_,_,_,stack = GetItemInfo(id)
+	if stack > 1 then
+		tt:AddDoubleLine(L["Stackable Size:"], stack, 1, 1, 1, 1, 1, 1)
 	end
 end
 
